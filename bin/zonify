@@ -190,6 +190,16 @@ def main
     changes = Zonify.diff(qualified, old_records, (types or %w| * |))
     STDERR.puts(display(changes)) unless quiet
     STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(changes)))
+  when 'ballot'
+    suffix, old_records = Zonify::YAML.read(File.read(ARGV[1]))
+    new_suffix, new_records = Zonify::YAML.read(File.read(ARGV[2]))
+    qualified = Zonify::Mappings.rewrite(new_records, [[new_suffix,[suffix]]])
+    votes = Zonify.ballot(qualified, old_records, (types or %w| * |))
+    adds, removes, keeps, ignores = votes
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:add=>adds)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:remove=>removes)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:keep=>keeps)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:ignore=>ignores)))
   when 'sync'
     suffix = ARGV[1]
     check_name(suffix)

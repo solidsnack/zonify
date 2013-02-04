@@ -393,6 +393,84 @@ def hoist(data, name, type, action)
   end
 end
 
+def ballot(new_records, old_records, types=['CNAME','SRV'])
+  adds    = []
+  removes = []
+  keeps   = []
+  ignores = []
+  ## Partition new records -- adds, keeps, ignores
+  new_records.each do |name, v|
+    old = old_records[name]
+    v.each do |type, data|
+      new_items = Zonify.itemized(data, name, type)
+      if types.member? '*' or types.member? type
+        old_data = ((old and old[type]) or {})
+        old_items = Zonify.itemized(old_data, name, type)
+        keeps.concat(new_items & old_items)
+        adds.concat(new_items - old_items)
+      else
+        ignores.concat(new_items)
+      end
+    end
+  end
+  ## Partitions old records -- removes, keeps, ignores
+  old_records.each do |name, v|
+    new = new_records[name]
+    v.each do |type, data|
+      old_items = Zonify.itemized(data, name, type)
+      if types.member? '*' or types.member? type
+        new_data = ((new and new[type]) or {})
+        new_items = Zonify.itemized(new_data, name, type)
+        # Already accounted for: keeps.concat(old_items & new_items)
+        removes.concat(old_items - new_items)
+      else
+        ignores.concat(old_items)
+      end
+    end
+  end
+  [adds, removes, keeps, ignores].map do |arr|
+    arr.sort_by do |record|
+      [ record[:name],   record[:type],
+        record[:value],  record[:set_identifier],
+        record[:ttl],    record[:weight] ]
+    end
+  end
+end
+
+# Unpack the data so that each resource records gets a tuple. For example,
+# a record like this:
+#
+#   { 'a.b' => { 'CNAME' => { 'i-abcd1234' => { :ttl    => 100,
+#                                               :weight => 16,
+#                                               :value  => ['x', 'y'] } } } }
+#
+# becomes:
+#
+#   [{ :name           => 'a.b',
+#      :type           => 'CNAME',
+#      :set_identifier => 'i-abcd1234',
+#      :ttl            => 100,
+#      :weight         => 16,
+#      :value          => 'x' },
+#    { :name           => 'a.b',
+#      :type           => 'CNAME',
+#      :set_identifier => 'i-abcd1234',
+#      :ttl            => 100,
+#      :weight         => 16,
+#      :value          => 'y' }]
+#
+# We do this to allow each member of a record set to be voted on separately.
+def itemized(data, name, type)
+  meta = {:name=>name, :type=>type}
+  if data[:value] # Not a WRR.
+    data[:value].map{|i| data.merge(meta.merge(:value=>i)) }
+  else # Is a WRR.
+    data.map do |k,v|
+      v[:value].map{|i| v.merge(meta.merge(:value=>i, :set_identifier=>k)) }
+    end.flatten
+  end
+end
+
 # Determine whether two resource record sets are the same in all respects
 # (keys missing in one should be missing in the other).
 def compare_records(a, b)
