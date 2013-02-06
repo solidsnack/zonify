@@ -200,6 +200,28 @@ def main
     STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:remove=>removes)))
     STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:keep=>keeps)))
     STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:ignore=>ignores)))
+  when 'tally'
+    STDERR.puts 'Not implemented.'
+    exit 0
+    # Sort votes in each ballet.
+    # Try to merge sorted lists, maintaining a count during the merge.
+    # Run over the new list and reorganize into:
+    # add, remove, keep, ignore
+    # Connection between adds and removes -- cancellation in favour of adds?
+    # In favour of *later* adds?
+    ballots = ARGV[1...ARGV.length].map do |path|
+      yaml = YAML.load(File.read(path))
+      abort 'Bad YAML parse.' unless yaml
+      ballot = [yaml[:add], yaml[:remove], yaml[:keep], yaml[:ignore]]
+      abort 'Malformed ballot (#{path}).' if ballot.any?{|x| x.nil? }
+      ballot
+    end
+    tallied = Zonify.tally(ballots)
+    adds, removes, keeps, ignores = Zonify.safe_delete_voting(tallied)
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:add=>adds)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:remove=>removes)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:keep=>keeps)))
+    STDOUT.write(Zonify::YAML.trim_lines(YAML.dump(:ignore=>ignores)))
   when 'sync'
     suffix = ARGV[1]
     check_name(suffix)

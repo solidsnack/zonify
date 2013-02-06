@@ -393,6 +393,53 @@ def hoist(data, name, type, action)
   end
 end
 
+def tally(ballots)
+  flattened = ballots.map do |adds, removes, keeps, ignores|
+    adds.map{|h|    h.merge(:votes=>['add'])    } +
+    removes.map{|h| h.merge(:votes=>['remove']) } +
+    keeps.map{|h|   h.merge(:votes=>['keep'])   } +
+    ignores.map{|h| h.merge(:votes=>['ignore']) }
+  end.map do |arr|
+    arr.sort_by do |record|
+      [ record[:name],  record[:type],
+        record[:value], record[:set_identifier], record[:votes],
+        record[:ttl],   record[:weight] ]
+    end
+  end.inject{|acc, ballot| parallel_merge_ballots(acc, ballot) }
+end
+
+# Merge sorted ballots.
+def parallel_merge_ballots(one, two)
+  result = []
+  one_l, two_l = [one, two].map{|x| x.length }
+  i, j = 0, 0
+  loop do
+    ci, cj = [comparable_form(one[i]), comparable_form(one[j])]
+    if ci == cj
+      votes = one[i][:votes] + two[j][:votes]
+      result.push(one[i].merge(:votes=>votes))
+    end
+    i+=1 unless ci > cj
+    j+=1 unless cj > ci
+    break unless i < one_l and j < two_l
+  end
+  # Clean up all remaining elements.
+  result.append(one[i...one_l]) if i < one_l
+  result.append(two[i...two_l]) if j < two_l
+  result
+end
+
+def comparable_form(ballot_entry)
+  [ ballot_entry[:name],           ballot_entry[:type],
+    ballot_entry[:set_identifier], ballot_entry[:value] ]
+end
+
+# Given some new records and some old records, records a decision about each
+# record, for later calculating a diff. Records that are masked out by type
+# filters -- typically one wants Zonify to ignore SOA and NS -- are placed in
+# the 'ignore' set. New records not among the old records are put in the 'add'
+# set; records in both collections are put in the 'keep' set; records present
+# only on the old collection are put in the 'remove' set.
 def ballot(new_records, old_records, types=['CNAME','SRV'])
   adds    = []
   removes = []
@@ -421,7 +468,7 @@ def ballot(new_records, old_records, types=['CNAME','SRV'])
       if types.member? '*' or types.member? type
         new_data = ((new and new[type]) or {})
         new_items = Zonify.itemized(new_data, name, type)
-        # Already accounted for: keeps.concat(old_items & new_items)
+        #### Already accounted for #### keeps.concat(old_items & new_items)
         removes.concat(old_items - new_items)
       else
         ignores.concat(old_items)
@@ -430,9 +477,9 @@ def ballot(new_records, old_records, types=['CNAME','SRV'])
   end
   [adds, removes, keeps, ignores].map do |arr|
     arr.sort_by do |record|
-      [ record[:name],   record[:type],
-        record[:value],  record[:set_identifier],
-        record[:ttl],    record[:weight] ]
+      [ record[:name],  record[:type],
+        record[:value], record[:set_identifier],
+        record[:ttl],   record[:weight] ]
     end
   end
 end
