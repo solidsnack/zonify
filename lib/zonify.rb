@@ -105,6 +105,10 @@ class AWS
           attrs[:priv] = i.private_dns_name.split('.').first.downcase
         end
         acc[i.id] = attrs
+      else
+        STDERR.puts("Skipping instance #{i.id}")
+        STDERR.puts("Because #{dns.nil? or dns.empty? or
+                               terminal_states.member? i.state}")
       end
       acc
     end
