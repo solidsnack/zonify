@@ -92,7 +92,7 @@ class AWS
   end
   def instances
     ec2.servers.inject({}) do |acc, i|
-      dns = i.dns_name or i.private_dns_name
+      dns = (i.dns_name or i.private_dns_name)
       # The default hostname for EC2 instances is derived from their internal
       # DNS entry.
       terminal_states = %w| terminated shutting-down |
@@ -105,10 +105,6 @@ class AWS
           attrs[:priv] = i.private_dns_name.split('.').first.downcase
         end
         acc[i.id] = attrs
-      else
-        STDERR.puts("Skipping instance #{i.id}")
-        STDERR.puts("Because #{dns.nil? or dns.empty? or
-                               terminal_states.member? i.state}")
       end
       acc
     end
